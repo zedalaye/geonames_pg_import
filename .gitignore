@@ -1,0 +1,11 @@
+/.idea
+
+/tmp/*
+!/tmp/.keep
+
+/pc/*
+!/pc/.keep
+
+.env
+.env.*
+!.env.example
