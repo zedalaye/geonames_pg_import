@@ -117,6 +117,20 @@ ALTER TABLE ONLY alternate_names
         FOREIGN KEY (geoname_id)
         REFERENCES geoname(id);
 
+/*
+   Add unicode flags to country_info
+   Unicode Flags are made using two Regional Indicators characters corresponding to the iso_alpha2 country code
+   "A" Regional Indicator is at \u1f1e6
+   RIc = char(ascii(Letter) - ascii('A) + x'1f1e6'::int)
+   as "A" ascii char is at 0x41: - x'41'::int + x'1f1e6'::int = x'1f1a5'::int
+ */
+ALTER TABLE country_info
+  ADD COLUMN flag CHAR(2)
+    GENERATED ALWAYS AS (
+        chr(ascii(substring(iso_alpha2, 1, 1)) + x'1f1a5'::int)
+     || chr(ascii(substring(iso_alpha2, 2, 1)) + x'1f1a5'::int)
+    ) STORED;
+
 -- Should be ran after data import
 ALTER TABLE geoname
     ADD COLUMN search_vector tsvector
