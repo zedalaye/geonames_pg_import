@@ -35,8 +35,8 @@ CREATE TABLE alternate_names (
     is_short_name     BOOLEAN,
     is_colloquial     BOOLEAN,
     is_historic       BOOLEAN,
-    usage_from        TEXT,
-    usage_to          TEXT
+    usage_from        TEXT, -- should be dates, but contains various kind of text
+    usage_to          TEXT  -- idem.
 );
 
 CREATE TABLE country_info (
