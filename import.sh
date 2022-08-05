@@ -50,6 +50,8 @@ help() {
   echo "--from-scratch (-f)  Force download of datasets"
   echo "--drop (-d)          Drop tables before import"
   echo "--create (-c)        Create tables before import"
+  echo "--get (-g)           Download/Update GeoNames datasets"
+  echo "--import (-i)        Import GeoNames datasets"
   echo
   echo "Notes:"
   echo "You have several ways to define the database password if your connection"
@@ -123,6 +125,8 @@ SCHEMA="${SCHEMA:-public}"
 CLEANUP_CACHE="false"
 DROP_TABLES="false"
 CREATE_TABLES="false"
+DOWNLOAD_DATA="false"
+IMPORT_DATA="false"
 
 while [ $# -ne 0 ]; do
   case $1 in
@@ -137,6 +141,12 @@ while [ $# -ne 0 ]; do
       ;;
     -c | --create)
       CREATE_TABLES="true"
+      ;;
+    -g | --get)
+      DOWNLOAD_DATA="true"
+      ;;
+    -i | --import)
+      IMPORT_DATA="true"
       ;;
     *)
       echo "Unknown parameter: $1"
@@ -178,81 +188,87 @@ if [[ "${CLEANUP_CACHE}" == "true" ]]; then
   rm -f "${WORKPATH}"/{${TMPPATH},${PCPATH}}/*
 fi
 
-echo
-echo ",---- STARTING (downloading, unpacking and preparing)"
+if [[ "${DOWNLOAD_DATA}" == "true" ]]; then
 
-# download and prepare datasets
-cd "${WORKPATH}/${TMPPATH}" || exit 1
-for i in "${FILES[@]}"; do
-  download_file "dump" $i
+  echo
+  echo ",---- STARTING (downloading, unpacking and preparing)"
 
-  if [ $? -eq 0 ]; then
-    case "$i" in
-        iso-languagecodes.txt | timeZones.txt)
-            cleanup_header "$i"
-            echo "| $i has been fixed"
-            ;;
-        countryInfo.txt)
-            cleanup_comments "$i"
-            echo "| $i has been fixed"
-            ;;
-    esac
-  fi
-done
+  # download and prepare datasets
+  cd "${WORKPATH}/${TMPPATH}" || exit 1
+  for i in "${FILES[@]}"; do
+    download_file "dump" $i
 
-# download the postalcodes dataset
-cd "${WORKPATH}/${PCPATH}" || exit 1
-download_file "zip" "allCountries.zip"
+    if [ $? -eq 0 ]; then
+      case "$i" in
+          iso-languagecodes.txt | timeZones.txt)
+              cleanup_header "$i"
+              echo "| $i has been fixed"
+              ;;
+          countryInfo.txt)
+              cleanup_comments "$i"
+              echo "| $i has been fixed"
+              ;;
+      esac
+    fi
+  done
 
-# go back to script home
-cd ${WORKPATH} || exit 1
+  # download the postalcodes dataset
+  cd "${WORKPATH}/${PCPATH}" || exit 1
+  download_file "zip" "allCountries.zip"
+
+  # go back to script home
+  cd ${WORKPATH} || exit 1
+
+fi
 
 # import datasets
-psql -e ${PSQL_COMMAND} << SQL
-\copy geoname (id, name, ascii_name, alternate_names, latitude, longitude,\
-               feature_class, feature_code, country, cc2, admin1, admin2,\
-               admin3, admin4, population, elevation, dem, timezone, modified_on)\
-    from '${WORKPATH}/${TMPPATH}/allCountries.txt' null as '';
+if [[ "${IMPORT_DATA}" == "true" ]]; then
+  psql -e ${PSQL_COMMAND} << SQL
+    \copy geoname (id, name, ascii_name, alternate_names, latitude, longitude,\
+                  feature_class, feature_code, country, cc2, admin1, admin2,\
+                  admin3, admin4, population, elevation, dem, timezone, modified_on)\
+        from '${WORKPATH}/${TMPPATH}/allCountries.txt' null as '';
 
-\copy hierarchy (parent_id, child_id, type)\
-    from '${WORKPATH}/${TMPPATH}/hierarchy.txt' null as '';
+    \copy hierarchy (parent_id, child_id, type)\
+        from '${WORKPATH}/${TMPPATH}/hierarchy.txt' null as '';
 
-\copy postal_codes (country_code, postal_code, place_name,\
-                   admin1_name, admin1_code, admin2_name, admin2_code,\
-                   admin3_name, admin3_code,\
-                   latitude, longitude,accuracy)\
-    from '${WORKPATH}/${PCPATH}/allCountries.txt' null as '';
+    \copy postal_codes (country_code, postal_code, place_name,\
+                      admin1_name, admin1_code, admin2_name, admin2_code,\
+                      admin3_name, admin3_code,\
+                      latitude, longitude,accuracy)\
+        from '${WORKPATH}/${PCPATH}/allCountries.txt' null as '';
 
-\copy time_zones (country_code, id, gmt_offset, dst_offset, raw_offset)\
-    from '${WORKPATH}/${TMPPATH}/timeZones.txt.tmp' null as '';
+    \copy time_zones (country_code, id, gmt_offset, dst_offset, raw_offset)\
+        from '${WORKPATH}/${TMPPATH}/timeZones.txt.tmp' null as '';
 
-\copy feature_codes (code, name, description)\
-    from '${WORKPATH}/${TMPPATH}/featureCodes_en.txt' null as '';
+    \copy feature_codes (code, name, description)\
+        from '${WORKPATH}/${TMPPATH}/featureCodes_en.txt' null as '';
 
-\copy admin1_codes (code, name, name_ascii, geoname_id)\
-    from '${WORKPATH}/${TMPPATH}/admin1CodesASCII.txt' null as '';
+    \copy admin1_codes (code, name, name_ascii, geoname_id)\
+        from '${WORKPATH}/${TMPPATH}/admin1CodesASCII.txt' null as '';
 
-\copy admin2_codes (code, name, name_ascii, geoname_id)\
-    from '${WORKPATH}/${TMPPATH}/admin2Codes.txt' null as '';
+    \copy admin2_codes (code, name, name_ascii, geoname_id)\
+        from '${WORKPATH}/${TMPPATH}/admin2Codes.txt' null as '';
 
-\copy admin5_codes (geoname_id, admin5)\
-    from '${WORKPATH}/${TMPPATH}/adminCode5.txt' null as '';
+    \copy admin5_codes (geoname_id, admin5)\
+        from '${WORKPATH}/${TMPPATH}/adminCode5.txt' null as '';
 
-\copy iso_language_codes (iso_639_3, iso_639_2, iso_639_1, language_name)\
-    from '${WORKPATH}/${TMPPATH}/iso-languagecodes.txt.tmp' null as '';
+    \copy iso_language_codes (iso_639_3, iso_639_2, iso_639_1, language_name)\
+        from '${WORKPATH}/${TMPPATH}/iso-languagecodes.txt.tmp' null as '';
 
-\copy country_info (iso_alpha2, iso_alpha3, iso_numeric, fips_code, country,\
-                    capital, area, population, continent, tld, currency_code,\
-                    currency_name, phone, postal, postal_regex, languages,\
-                    geoname_id, neighbours, equivalent_fips_code)\
-    from '${WORKPATH}/${TMPPATH}/countryInfo.txt.tmp' null as '';
+    \copy country_info (iso_alpha2, iso_alpha3, iso_numeric, fips_code, country,\
+                        capital, area, population, continent, tld, currency_code,\
+                        currency_name, phone, postal, postal_regex, languages,\
+                        geoname_id, neighbours, equivalent_fips_code)\
+        from '${WORKPATH}/${TMPPATH}/countryInfo.txt.tmp' null as '';
 
-\copy alternate_names (id,geoname_id, iso_language, alternate_name,\
-                       is_preferred_name, is_short_name,\
-                       is_colloquial, is_historic,\
-                       usage_from, usage_to)\
-    from '${WORKPATH}/${TMPPATH}/alternateNamesV2.txt' null as '';
+    \copy alternate_names (id,geoname_id, iso_language, alternate_name,\
+                          is_preferred_name, is_short_name,\
+                          is_colloquial, is_historic,\
+                          usage_from, usage_to)\
+        from '${WORKPATH}/${TMPPATH}/alternateNamesV2.txt' null as '';
 SQL
+fi
 
 # create referential constraints and indexes
 if [[ "${CREATE_TABLES}" == "true" ]]; then
