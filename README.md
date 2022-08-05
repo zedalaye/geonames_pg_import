@@ -19,7 +19,7 @@ A working PostgreSQL instance with PostGIS extensions installed.
 
 This script has been tested against PostgreSQL 14
 
-You will also need the `wget` command line tool.
+You will also need the `wget` and `unzip` command line tools.
 
 ## Usage
 
@@ -30,10 +30,13 @@ Copy `.env.example` and change variables according to your needs/environment.
 `PGPASSWORD` (or `DBPASSWORD`) can be specified in the `.env` file or in the command line :
 
 ```bash
-PGPASSWORD=mypassword ./import.sh -d -c
+PGPASSWORD=mypassword ./import.sh -d -c -g -i
 ```
 
 * `-d (--drop)` will drop existing tables
 * `-c (--create)` will recreate tables and after import it will add integrity constraints (primary and foreign keys) and some indexes.
+* `-f (--from-scratch)` will force download of GeoNames datasets
+* `-g (--get)` will download GeoNames datasets
+* `-i (--import)` will import GeoNames datasets
 
 For subsequent imports, you can also clean the download cache to start from scratch by using the `-f (--from-scratch)` argument.
